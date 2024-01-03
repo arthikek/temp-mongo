@@ -31,11 +31,18 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install MongoDB
+        run: choco install mongodb --version 4.4.6
+
+      - name: Create MongoDB data and log directories
         run: |
-          choco install mongodb --version 4.4.6
-          mkdir C:\data\db
-          C:\ProgramData\chocolatey\lib\mongodb\tools\mongod --install --logpath C:\data\log\mongod.log --dbpath C:\data\db
-          Start-Service MongoDB
+          New-Item -ItemType Directory -Path C:\data\db -Force
+          New-Item -ItemType Directory -Path C:\data\log -Force
+
+      - name: Start MongoDB Service
+        run: |
+          Set-Service -Name mongodb -StartupType Automatic
+          Start-Service -Name mongodb
+      
 
       - name: Build
         uses: actions-rs/cargo@v1
@@ -47,4 +54,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --release
+          args: --release --color=always --no-default-features --features async-std-runtime
