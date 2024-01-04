@@ -34,8 +34,11 @@ mod temp_mongo;
 mod util;
 mod docker;
 
+
+
 pub use error::Error;
 pub use util::SeedData;
 pub use temp_mongo::TempMongo;
 pub use temp_mongo::TempMongoBuilder;
+pub use docker::TempMongoDocker;
 

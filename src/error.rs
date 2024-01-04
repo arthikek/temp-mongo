@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+
+
+
+
 /// An error that can occur when creating or cleaning a MongDB instance.
 pub struct Error {
 	/// The actual error.
@@ -57,5 +61,24 @@ impl std::fmt::Display for ErrorInner {
 impl From<ErrorInner> for Error {
 	fn from(inner: ErrorInner) -> Self {
 		Self { inner }
+	}
+}
+#[derive(Debug)]
+pub enum TempMongoDockerError {
+	BollardConnectionError(bollard::errors::Error),
+	ContainerCreationError(String),
+	MongoConnectionError(mongodb::error::Error),
+	DockerConnectionError(String),
+}
+
+impl From<bollard::errors::Error> for TempMongoDockerError {
+	fn from(err: bollard::errors::Error) -> Self {
+		TempMongoDockerError::BollardConnectionError(err)
+	}
+}
+
+impl From<mongodb::error::Error> for TempMongoDockerError {
+	fn from(err: mongodb::error::Error) -> Self {
+		TempMongoDockerError::MongoConnectionError(err)
 	}
 }

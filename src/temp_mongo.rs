@@ -250,7 +250,6 @@ impl TempMongo {
 ///
 /// After configuring the desirec options, run [`TempMongoBuilder::spawn()`].
 #[derive(Debug)]
-
 pub struct TempMongoBuilder {
     /// The parent directory for the temporary directory.
     ///
