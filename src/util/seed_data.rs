@@ -1,11 +1,11 @@
+use calamine::{open_workbook_auto, DataType, Reader};
+use mongodb::{bson::Document, Client};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
-use mongodb::{Client, bson::Document};
-use calamine::{open_workbook_auto, DataType, Reader};
 
 /// Data seed options for mongodb instance
-/// 
+///
 /// The database_name and collection_name are used to specify the database and collection to seed the data into
 #[derive(Deserialize)]
 pub struct SeedData {
@@ -42,7 +42,12 @@ impl SeedData {
     /// # Returns
     ///
     /// Returns an instance of `SeedData` with the specified database and collection names, and the provided documents.
-    pub fn new_in(&self, database_name: &str, collection_name: &str, documents: Vec<Document>) -> Self {
+    pub fn new_in(
+        &self,
+        database_name: &str,
+        collection_name: &str,
+        documents: Vec<Document>,
+    ) -> Self {
         Self {
             database_name: database_name.to_string(),
             collection_name: collection_name.to_string(),
@@ -61,7 +66,12 @@ impl SeedData {
     /// # Returns
     ///
     /// Returns an instance of `SeedData` with the specified database and collection names, and the provided documents.
-    pub fn new_with_string(&self, database_name: &String, collection_name: &String, documents: Vec<Document>) -> Self {
+    pub fn new_with_string(
+        &self,
+        database_name: &String,
+        collection_name: &String,
+        documents: Vec<Document>,
+    ) -> Self {
         Self {
             database_name: database_name.clone(),
             collection_name: collection_name.clone(),
@@ -69,7 +79,6 @@ impl SeedData {
         }
     }
 
-    
     /// Reads and parses a seed data file into a `SeedData` instance.
     ///
     /// # Arguments
@@ -95,10 +104,13 @@ impl SeedData {
     /// # Errors
     ///
     /// Returns an error if the file cannot be read or if the data is not in the expected format.
-    pub fn from_excel(&self, file_path: &Path, sheet: &str) -> Result<Vec<mongodb::bson::Document>, Box<dyn std::error::Error>> {
+    pub fn from_excel(
+        &self,
+        file_path: &Path,
+        sheet: &str,
+    ) -> Result<Vec<mongodb::bson::Document>, Box<dyn std::error::Error>> {
         let mut workbook = open_workbook_auto(file_path)?;
-        let range = workbook.worksheet_range(sheet)
-            .map_err(|e| e.to_string())?;
+        let range = workbook.worksheet_range(sheet).map_err(|e| e.to_string())?;
 
         // Find the first non-empty row to use as headers
         let mut rows = range.rows();
@@ -107,11 +119,14 @@ impl SeedData {
             .ok_or_else(|| "No non-empty header row found")?;
 
         // Determine the starting column index based on the first non-empty cell
-        let start_col = header_row.iter().position(|cell| !cell.is_empty())
+        let start_col = header_row
+            .iter()
+            .position(|cell| !cell.is_empty())
             .ok_or_else(|| "No non-empty header cell found")?;
 
         // Collect only non-empty headers
-        let headers: Vec<String> = header_row.iter()
+        let headers: Vec<String> = header_row
+            .iter()
             .skip(start_col)
             .map(|cell| cell.get_string().unwrap_or_default().to_owned())
             .filter(|header| !header.is_empty())
@@ -141,7 +156,9 @@ impl SeedData {
     ///
     /// Returns an error if any MongoDB operation fails during the seeding process.
     pub async fn seed(&self, client: &Client) -> mongodb::error::Result<()> {
-        let collection = client.database(&self.database_name).collection(&self.collection_name);
+        let collection = client
+            .database(&self.database_name)
+            .collection(&self.collection_name);
         for document in &self.documents {
             collection.insert_one(document.clone(), None).await?;
         }
@@ -158,30 +175,22 @@ impl SeedData {
     /// # Returns
     ///
     /// Returns a `mongodb::bson::Document` representing the row of data.
-   fn row_to_document(headers: &[String], row: &[DataType]) -> mongodb::bson::Document {
-    let mut document = mongodb::bson::doc! {};
+    fn row_to_document(headers: &[String], row: &[DataType]) -> mongodb::bson::Document {
+        let mut document = mongodb::bson::doc! {};
 
-    for (header, cell) in headers.iter().zip(row.iter()) {
-        let bson_value = match cell {
-            DataType::String(value) => {
-                mongodb::bson::Bson::String(value.clone())
-            },
-            DataType::Float(value) => {
-                mongodb::bson::Bson::Double(*value)
-            },
-            DataType::Int(value) => {
-                mongodb::bson::Bson::Int64(*value as i64)
-            },
-            DataType::Bool(value) => {
-                mongodb::bson::Bson::Boolean(*value)
-            },
-            // Handle other DataType variants as needed
-            _ => continue, // Skip unknown or empty types
-        };
+        for (header, cell) in headers.iter().zip(row.iter()) {
+            let bson_value = match cell {
+                DataType::String(value) => mongodb::bson::Bson::String(value.clone()),
+                DataType::Float(value) => mongodb::bson::Bson::Double(*value),
+                DataType::Int(value) => mongodb::bson::Bson::Int64(*value as i64),
+                DataType::Bool(value) => mongodb::bson::Bson::Boolean(*value),
+                // Handle other DataType variants as needed
+                _ => continue, // Skip unknown or empty types
+            };
 
-        document.insert(header.clone(), bson_value);
+            document.insert(header.clone(), bson_value);
+        }
+
+        document
     }
-
-    document
-}
 }

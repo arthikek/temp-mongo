@@ -29,16 +29,13 @@
 
 #![warn(missing_docs)]
 
+mod docker;
 mod error;
 mod temp_mongo;
 mod util;
-mod docker;
 
-
-
+pub use docker::TempMongoDocker;
 pub use error::Error;
-pub use util::SeedData;
 pub use temp_mongo::TempMongo;
 pub use temp_mongo::TempMongoBuilder;
-pub use docker::TempMongoDocker;
-
+pub use util::SeedData;
