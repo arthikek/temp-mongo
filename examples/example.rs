@@ -8,7 +8,7 @@ async fn main() {
     let_assert!(Ok(mongo) = TempMongo::new().await); //new mongo instance
     println!("Temporary directory: {}", mongo.directory().display()); //directory().display() --> gets path to temp state directory and displays it
 
-    let database = mongo.client().database("test"); // calls database method on mongo instance and passes in "test" as the database name
+    let database = mongo.client().database("test_example_1"); // calls database method on mongo instance and passes in "test" as the database name
     let collection = database.collection::<Document>("animals"); // calls collection method on database and passes in "animals" as the collection name
 
     let_assert!(
@@ -52,27 +52,16 @@ async fn main() {
         mongodb::bson::doc! {"name": "Alice", "age": 30},
         mongodb::bson::doc! {"name": "Bob", "age": 25},
     ];
-    let mut seed_data = mongo.seed().new_in("test_db2", "trex", documents);
 
-    match mongo.seed_data(&seed_data).await {
-        Ok(_) => println!("Data seeded successfully."),
-        Err(e) => println!("Error seeding data: {:?}", e),
-    }
+    let prepared_seed_data = mongo.prepare_seed_document("test_example_1_excel", "trex", documents);
 
-    // Option 2: Using seeder via excel
-    //seeding data into mongodb instance
-    let path = std::path::Path::new("./spreadsheet.xlsx");
-    let excel = mongo.seed().from_excel(path, "Blad1").unwrap();
-    seed_data = mongo.seed().new_in("test_db2", "trex", excel);
-
-    //seeding data into mongodb instance
-    match mongo.seed_data(&seed_data).await {
+    match mongo.seed_document(&prepared_seed_data).await {
         Ok(_) => println!("Data seeded successfully."),
         Err(e) => println!("Error seeding data: {:?}", e),
     }
 
     // Advanced printing
-    match mongo.print_documents("test_db2", "trex").await {
+    match mongo.print_documents("test_example_1_excel", "trex").await {
         Ok(_) => println!("Data succesfully retrieved."),
         Err(e) => println!("Error retrieving data: {:?}", e),
     };
