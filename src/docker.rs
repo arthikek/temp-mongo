@@ -77,40 +77,51 @@ impl TempMongoDocker {
             ..Default::default()
         };
         //Check this error handeling
-        self.check_and_create_container(container_opts, container_config).await.unwrap();
+        self.check_and_create_container(container_opts, container_config)
+            .await
+            .unwrap();
 
         let uri = "mongodb://127.0.0.1:27017/messenger?directConnection=true";
-        self.mongo_client = Some(Client::with_uri_str(uri).await.map_err(TempMongoDockerError::MongoConnectionError)?);
+        self.mongo_client = Some(
+            Client::with_uri_str(uri)
+                .await
+                .map_err(TempMongoDockerError::MongoConnectionError)?,
+        );
 
         Ok(())
     }
-
 
     /// Checks the status of the Docker container and creates it if it does not exist.
     /// This function ensures that only one instance of the specified container is running.
     /// In case of a naming conflict (HTTP 409 error), it waits briefly and continues,
     /// assuming that another process is already creating the container.
     /// Returns an error if the container creation fails for reasons other than a naming conflict.
-    async fn check_and_create_container(&mut self, container_opts: CreateContainerOptions<&str>, container_config: Config<&str>) -> Result<(), TempMongoDockerError> {
+    async fn check_and_create_container(
+        &mut self,
+        container_opts: CreateContainerOptions<&str>,
+        container_config: Config<&str>,
+    ) -> Result<(), TempMongoDockerError> {
         let retry_wait_duration = Duration::from_millis(50);
 
         if !self.container_status().await? {
-            match self.create_container(container_opts, container_config).await {
+            match self
+                .create_container(container_opts, container_config)
+                .await
+            {
                 Some(Ok(_)) => Ok(()),
-                Some(Err(TempMongoDockerError::BollardConnectionError(bollard::errors::Error::DockerResponseServerError { status_code, .. })))
-                if status_code == 409 => {
-
+                Some(Err(TempMongoDockerError::BollardConnectionError(
+                    bollard::errors::Error::DockerResponseServerError { status_code, .. },
+                ))) if status_code == 409 => {
                     tokio::time::sleep(retry_wait_duration).await;
                     Ok(())
-                },
+                }
                 Some(Err(e)) => Err(e),
-                None => Ok(())
+                None => Ok(()),
             }
         } else {
             Ok(())
         }
     }
-
 
     /// Checks if the MongoDB container is currently running.
     ///
@@ -124,19 +135,31 @@ impl TempMongoDocker {
 
         let container_list_future = self.docker_client.list_containers(Some(options));
         match container_list_future.await {
-            Ok(containers) => {
-                Ok(containers.iter().any(|container| {
-                    container.names.iter().flatten().any(|name| name.trim_start_matches('/') == "temp_mongo_docker")
-                }))
-            }
-            Err(error) => Err(TempMongoDockerError::DockerConnectionError(error.to_string())),
+            Ok(containers) => Ok(containers.iter().any(|container| {
+                container
+                    .names
+                    .iter()
+                    .flatten()
+                    .any(|name| name.trim_start_matches('/') == "temp_mongo_docker")
+            })),
+            Err(error) => Err(TempMongoDockerError::DockerConnectionError(
+                error.to_string(),
+            )),
         }
     }
 
     /// create a new Docker container using the provided options and
     /// configuration parameters.
-    async fn create_container(&mut self, container_opts: CreateContainerOptions<&str>, container_config: Config<&str>) -> Option<Result<(), TempMongoDockerError>> {
-        match self.docker_client.create_container(Some(container_opts), container_config).await {
+    async fn create_container(
+        &mut self,
+        container_opts: CreateContainerOptions<&str>,
+        container_config: Config<&str>,
+    ) -> Option<Result<(), TempMongoDockerError>> {
+        match self
+            .docker_client
+            .create_container(Some(container_opts), container_config)
+            .await
+        {
             Ok(response) => {
                 println!("Container created with id {}", response.id);
                 Some(Ok(()))
@@ -144,9 +167,6 @@ impl TempMongoDocker {
             Err(error) => Some(Err(TempMongoDockerError::BollardConnectionError(error))),
         }
     }
-
-
-
 
     /// Pulls the latest MongoDB image from the Docker registry.
     /// This function checks for the latest MongoDB image and pulls it if not present.
@@ -159,18 +179,16 @@ impl TempMongoDocker {
             ..Default::default()
         };
 
-        let mut create_image_stream = self.docker_client.create_image(Some(create_image_options), None, None);
+        let mut create_image_stream =
+            self.docker_client
+                .create_image(Some(create_image_options), None, None);
         while let Some(create_result) = create_image_stream.next().await {
             match create_result {
-                Ok(_) => {
-
-                }
+                Ok(_) => {}
                 Err(e) => return Err(TempMongoDockerError::DockerConnectionError(e.to_string())),
             }
         }
 
         Ok(mongo_image)
     }
-
-
 }

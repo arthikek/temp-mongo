@@ -26,6 +26,7 @@ calamine = "0.23.1"
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 cmd_lib = "1.9.3"
 rand = "0.8.5"
+bollard = "0.15.0"
 
 
 [dev-dependencies]

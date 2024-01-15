@@ -23,10 +23,10 @@ pub enum ErrorInner {
     /// Failed to clean up the temporary directory.
     CleanDir(PathBuf, std::io::Error),
 
-	/// Failed to connect to the server.
-	Connect(String, mongodb::error::Error),
+    /// Failed to connect to the server.
+    Connect(String, mongodb::error::Error),
 
-	Port,
+    Port,
 }
 
 impl std::error::Error for Error {}
@@ -44,23 +44,23 @@ impl std::fmt::Display for Error {
 }
 
 impl std::fmt::Display for ErrorInner {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::MakeTempDir(e) => write!(f, "Failed to create temporary directory: {e}"),
-			Self::MakeDbDir(path, e) => {
-				write!(f, "Failed to create data directory {}: {e}", path.display())
-			}
-			Self::SpawnServer(name, e) => write!(f, "Failed to run server command: {name}: {e}"),
-			Self::KillServer(e) => write!(f, "Failed to terminate spanwed server: {e}"),
-			Self::CleanDir(path, e) => write!(
-				f,
-				"Failed to clean up temporary state directory {}: {e}",
-				path.display()
-			),
-			Self::Connect(address, e) => write!(f, "Failed to connect to server at {address}: {e}"),
-			Self::Port => write!(f, "Failed to select a free port by the os "),
-		}
-	}
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MakeTempDir(e) => write!(f, "Failed to create temporary directory: {e}"),
+            Self::MakeDbDir(path, e) => {
+                write!(f, "Failed to create data directory {}: {e}", path.display())
+            }
+            Self::SpawnServer(name, e) => write!(f, "Failed to run server command: {name}: {e}"),
+            Self::KillServer(e) => write!(f, "Failed to terminate spanwed server: {e}"),
+            Self::CleanDir(path, e) => write!(
+                f,
+                "Failed to clean up temporary state directory {}: {e}",
+                path.display()
+            ),
+            Self::Connect(address, e) => write!(f, "Failed to connect to server at {address}: {e}"),
+            Self::Port => write!(f, "Failed to select a free port by the os "),
+        }
+    }
 }
 
 impl From<ErrorInner> for Error {
