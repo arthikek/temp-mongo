@@ -120,19 +120,24 @@ async fn seeding_document() {
     assert!(let Ok(()) = mongo.kill_and_clean().await);
 }
 
+///Generates single docker container and
+#[cfg_attr(feature = "tokio-runtime", tokio::test)]
+#[cfg_attr(feature = "async-std-runtime", async_std::test)]
 async fn test_temp_mongo_docker() {
     // Initialize TempMongoDocker
     let mut temp_mongo_docker = TempMongoDocker::new().expect("Failed to create TempMongoDocker");
 
-    // Create a MongoDB container
-    let_assert!(Ok(_container) = temp_mongo_docker.create().await);
-
     // Assuming `create` also initializes `mongo_client`
-    let mongo_client = temp_mongo_docker
+    temp_mongo_docker
+        .create()
+        .await
+        .expect("Failed to create MongoDB client");
+    let mongodb_client = temp_mongo_docker
         .mongo_client
-        .as_ref()
-    let database = mongo_client.database("test");
-        .expect("MongoDB client not initialized");
+        .clone()
+        .expect("Failed to create MongoDB client");
+
+    let database = mongodb_client.database("test");
     let collection = database.collection::<Document>("foo");
     // Insert a document
 
@@ -145,26 +150,52 @@ async fn test_temp_mongo_docker() {
 
     // Find the inserted document
     let_assert!(Ok(Some(document)) = collection.find_one(doc! { "_id": id }, None).await);
-    assert!(document == doc! { "_id": id, "hello": "docker world" });
-}
+    assert_eq!(document, doc! { "_id": id, "hello": "docker world" });
 
+    assert!(let Ok(()) = temp_mongo_docker.kill_and_clean().await);
+}
 
 #[cfg_attr(feature = "tokio-runtime", tokio::test)]
 #[cfg_attr(feature = "async-std-runtime", async_std::test)]
-async fn test_container_status() {
-    let mut temp_mongo_docker = TempMongoDocker::new().expect("Failed to create TempMongoDocker");
-    // Create a TempMongoDocker instance
+async fn multiple_test_temp_mongo_docker() {
+    let instance_count = 5;
 
-    // Set up the environment (assuming this creates a container named "temp_mongo_docker")
-    temp_mongo_docker
-        .await
-        .expect("Failed to create environment");
-        .create()
+    let handles = (0..instance_count)
+        .map(|_| {
+            tokio::spawn(async move {
+                let mut temp_mongo_docker =
+                    TempMongoDocker::new().expect("Failed to create TempMongoDocker");
 
-    // Test the container_status function
-    let status = temp_mongo_docker.container_status().await;
-    match status {
-        Ok(status) => assert!(status,"The container is found!"),
-        Err(error) => panic!("Error while checking container status: {:?}", error),
+                // Assuming `create` also initializes `mongo_client`
+                temp_mongo_docker
+                    .create()
+                    .await
+                    .expect("Failed to create MongoDB client");
+                let mongodb_client = temp_mongo_docker
+                    .mongo_client
+                    .clone()
+                    .expect("Failed to create MongoDB client");
+
+                let database = mongodb_client.database("test");
+                let collection = database.collection::<Document>("foo");
+
+                let_assert!(
+                    Ok(id) = collection
+                        .insert_one(doc! { "hello": "docker world" }, None)
+                        .await
+                );
+                let_assert!(Some(id) = id.inserted_id.as_object_id());
+                let_assert!(
+                    Ok(Some(document)) = collection.find_one(doc! { "_id": id }, None).await
+                );
+                assert_eq!(document, doc! { "_id": id, "hello": "docker world" });
+                assert!(let Ok(()) = temp_mongo_docker.kill_and_clean().await);
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        let result = handle.await;
+        assert!(result.is_ok());
     }
 }

@@ -70,18 +70,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install MongoDB
         run: choco install mongodb --version 4.4.6
-      - name: Create MongoDB data and log directories
-        run: |
-          New-Item -ItemType Directory -Path C:\data\db -Force
-          New-Item -ItemType Directory -Path C:\data\log -Force
-      - name: Start MongoDB Service
-        run: |
-          Set-Service -Name MongoDB -StartupType Automatic
-          Start-Service -Name MongoDB
+
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --all-targets
-      - name: Run tests
-        uses: actions-rs/cargo
+

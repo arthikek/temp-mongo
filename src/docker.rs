@@ -1,12 +1,14 @@
 use crate::error::TempMongoDockerError;
-use bollard::container::{Config, CreateContainerOptions, ListContainersOptions};
+use crate::util::PortGenerator;
+use bollard::container::{Config, CreateContainerOptions, StartContainerOptions};
 use bollard::image::CreateImageOptions;
 use bollard::models::{HostConfig, PortBinding};
 use bollard::Docker;
 use futures_util::stream::StreamExt;
 use mongodb::Client;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::string::String;
+use tokio::time::sleep;
 
 /// A utility for creating and managing a temporary MongoDB instance within a Docker container.
 ///
@@ -18,6 +20,7 @@ pub struct TempMongoDocker {
     docker_client: Docker,
     /// MongoDB client for performing operations against the MongoDB instance within the container.
     pub mongo_client: Option<Client>,
+    name_container: Option<String>,
 }
 
 impl TempMongoDocker {
@@ -42,6 +45,7 @@ impl TempMongoDocker {
         Ok(TempMongoDocker {
             docker_client,
             mongo_client: None,
+            name_container: None,
         })
     }
 
@@ -52,36 +56,37 @@ impl TempMongoDocker {
     /// Returns `Ok` if successful, or an error in case of any failures.
     pub async fn create(&mut self) -> Result<(), TempMongoDockerError> {
         self.setup_image().await?;
-
         let container_opts = CreateContainerOptions {
-            name: "temp_mongo_docker",
-            platform: None,
+            name: "",
+            platform: Some("linux/amd64"),
         };
 
+        let port = PortGenerator::new().generate().selected_port().unwrap();
         let container_config = Config {
             image: Some("mongo:latest"),
-            env: Some(vec![
-                "MONGO_INITDB_ROOT_USERNAME=myuser",
-                "MONGO_INITDB_ROOT_PASSWORD=mypassword",
-            ]),
+
+            cmd: Some(vec!["mongod", "--noauth"]),
             host_config: Some(HostConfig {
                 port_bindings: Some(HashMap::from([(
                     "27017/tcp".to_string(),
                     Some(vec![PortBinding {
                         host_ip: Some("127.0.0.1".to_string()),
-                        host_port: Some("27017".to_string()),
+                        host_port: Some(port.to_string()),
                     }]),
                 )])),
                 ..Default::default()
             }),
             ..Default::default()
         };
-        //Check this error handeling
-        self.check_and_create_container(container_opts, container_config)
+
+        self.start_container(container_opts, container_config)
             .await
             .unwrap();
 
-        let uri = "mongodb://127.0.0.1:27017/messenger?directConnection=true";
+        let uri = format!(
+            "mongodb://127.0.0.1:{}/messenger?directConnection=true",
+            port
+        );
         self.mongo_client = Some(
             Client::with_uri_str(uri)
                 .await
@@ -96,76 +101,36 @@ impl TempMongoDocker {
     /// In case of a naming conflict (HTTP 409 error), it waits briefly and continues,
     /// assuming that another process is already creating the container.
     /// Returns an error if the container creation fails for reasons other than a naming conflict.
-    async fn check_and_create_container(
+
+    /// create a new Docker container using the provided options and
+    /// configuration parameters.
+    async fn start_container(
         &mut self,
         container_opts: CreateContainerOptions<&str>,
         container_config: Config<&str>,
     ) -> Result<(), TempMongoDockerError> {
-        let retry_wait_duration = Duration::from_millis(50);
-
-        if !self.container_status().await? {
-            match self
-                .create_container(container_opts, container_config)
-                .await
-            {
-                Some(Ok(_)) => Ok(()),
-                Some(Err(TempMongoDockerError::BollardConnectionError(
-                    bollard::errors::Error::DockerResponseServerError { status_code, .. },
-                ))) if status_code == 409 => {
-                    tokio::time::sleep(retry_wait_duration).await;
-                    Ok(())
-                }
-                Some(Err(e)) => Err(e),
-                None => Ok(()),
-            }
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Checks if the MongoDB container is currently running.
-    ///
-    /// Returns `Ok(true)` if the container is running, `Ok(false)` if not, and an error
-    /// if there is a problem checking the container status.
-    pub async fn container_status(&self) -> Result<bool, TempMongoDockerError> {
-        let options = ListContainersOptions::<String> {
-            all: true,
-            ..Default::default()
-        };
-
-        let container_list_future = self.docker_client.list_containers(Some(options));
-        match container_list_future.await {
-            Ok(containers) => Ok(containers.iter().any(|container| {
-                container
-                    .names
-                    .iter()
-                    .flatten()
-                    .any(|name| name.trim_start_matches('/') == "temp_mongo_docker")
-            })),
-            Err(error) => Err(TempMongoDockerError::DockerConnectionError(
-                error.to_string(),
-            )),
-        }
-    }
-
-    /// create a new Docker container using the provided options and
-    /// configuration parameters.
-    async fn create_container(
-        &mut self,
-        container_opts: CreateContainerOptions<&str>,
-        container_config: Config<&str>,
-    ) -> Option<Result<(), TempMongoDockerError>> {
-        match self
+        let create_response = self
             .docker_client
             .create_container(Some(container_opts), container_config)
             .await
-        {
-            Ok(response) => {
-                println!("Container created with id {}", response.id);
-                Some(Ok(()))
-            }
-            Err(error) => Some(Err(TempMongoDockerError::BollardConnectionError(error))),
-        }
+            .map_err(TempMongoDockerError::BollardConnectionError)?;
+
+        // Container ID from the create response
+        self.name_container = Some(create_response.id);
+
+        let container_name = match self.name_container {
+            Some(ref name) => name,
+            None => return Err(TempMongoDockerError::ContainerNameNotSet),
+        };
+
+        // Now start the container using the container ID
+        self.docker_client
+            .start_container(container_name, None::<StartContainerOptions<String>>)
+            .await
+            .map_err(TempMongoDockerError::BollardConnectionError)?;
+
+        sleep(std::time::Duration::from_millis(50)).await;
+        Ok(())
     }
 
     /// Pulls the latest MongoDB image from the Docker registry.
@@ -190,5 +155,40 @@ impl TempMongoDocker {
         }
 
         Ok(mongo_image)
+    }
+
+    /// Stops the MongoDB container and removes it.
+    pub async fn kill_and_clean(&mut self) -> Result<(), TempMongoDockerError> {
+        let container_name = match self.name_container {
+            Some(ref name) => name,
+            None => return Err(TempMongoDockerError::ContainerNameNotSet),
+        };
+
+        self.docker_client
+            .stop_container(container_name, None)
+            .await
+            .map_err(TempMongoDockerError::BollardConnectionError)?;
+
+        // Now remove the container
+        self.docker_client
+            .remove_container(container_name, None)
+            .await
+            .map_err(TempMongoDockerError::BollardConnectionError)?;
+
+        Ok(())
+    }
+    ///Stops the docker container however retains the information in the docker container.
+    pub async fn kill_not_clean(&mut self) -> Result<(), TempMongoDockerError> {
+        let container_name = match self.name_container {
+            Some(ref name) => name,
+            None => return Err(TempMongoDockerError::ContainerNameNotSet),
+        };
+
+        self.docker_client
+            .stop_container(container_name, None)
+            .await
+            .map_err(TempMongoDockerError::BollardConnectionError)?;
+
+        Ok(())
     }
 }

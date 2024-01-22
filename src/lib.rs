@@ -39,4 +39,3 @@ pub use error::Error;
 pub use temp_mongo::TempMongo;
 pub use temp_mongo::TempMongoBuilder;
 pub use util::DataSeeder;
-pub use util::SeedData;

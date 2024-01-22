@@ -74,6 +74,41 @@ pub enum TempMongoDockerError {
     ContainerCreationError(String),
     MongoConnectionError(mongodb::error::Error),
     DockerConnectionError(String),
+    ContainerNameNotSet,
+    ContainerNotCreated,
+    InvalidContainerState,
+    InvalidContainerStatus,
+}
+
+impl std::fmt::Display for TempMongoDockerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TempMongoDockerError::BollardConnectionError(e) => {
+                write!(f, "Failed to connect to Docker daemon: {}", e)
+            }
+            TempMongoDockerError::ContainerCreationError(e) => {
+                write!(f, "Failed to create container: {}", e)
+            }
+            TempMongoDockerError::MongoConnectionError(e) => {
+                write!(f, "Failed to connect to MongoDB instance: {}", e)
+            }
+            TempMongoDockerError::DockerConnectionError(e) => {
+                write!(f, "Failed to connect to Docker daemon: {}", e)
+            }
+            TempMongoDockerError::ContainerNameNotSet => {
+                write!(f, "Container name not set")
+            }
+            TempMongoDockerError::ContainerNotCreated => {
+                write!(f, "Container not created")
+            }
+            TempMongoDockerError::InvalidContainerState => {
+                write!(f, "Invalid container status")
+            }
+            TempMongoDockerError::InvalidContainerStatus => {
+                write!(f, "Invalid container status")
+            }
+        }
+    }
 }
 
 impl From<bollard::errors::Error> for TempMongoDockerError {
