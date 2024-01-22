@@ -88,12 +88,12 @@ impl TempMongo {
             .new_in_with_string(database_name, collection_name, documents)
     }
 
-    /// Seed document into MongoDB database
-    /// # Arguments
-    /// * `seed_data` - The seed data to insert into the database
-    pub async fn seed_document(&self, seed_data: &DataSeeder) -> mongodb::error::Result<()> {
-        seed_data.seed_document(&self.client).await
-    }
+	/// Seed document into MongoDB database
+	/// # Arguments
+	/// * `seed_data` - The seed data to insert into the database
+	pub async fn load_document(&self, seed_data: &DataSeeder) -> mongodb::error::Result<()> {
+		seed_data.seed_document(&self.client).await
+	}
 
     /// Get a client for the MongDB instance.
     ///

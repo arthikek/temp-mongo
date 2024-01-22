@@ -14,13 +14,13 @@ pub struct TempDir {
 }
 
 impl TempDir {
-    /// Create a new temporary directory in the system tempdir. (for unix this is /tmp)
-    pub fn new(clean_on_drop: bool) -> std::io::Result<Self> {
-        Ok(Self {
-            inner: ManuallyDrop::new(tempfile::tempdir()?),
-            clean_on_drop,
-        })
-    }
+	/// Create a new temporary directory in the system tempdir
+	pub fn new(clean_on_drop: bool) -> std::io::Result<Self> {
+		Ok(Self {
+			inner: ManuallyDrop::new(tempfile::tempdir()?),
+			clean_on_drop,
+		})
+	}
 
     /// Create a new temporary directory in the given parent folder.
     pub fn new_in(parent: impl AsRef<Path>, clean_on_drop: bool) -> std::io::Result<Self> {
